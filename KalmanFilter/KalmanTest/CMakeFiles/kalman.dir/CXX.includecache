@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/cj/code/play_opencv/KalmanFilter/KalmanTest/kalman.cpp
+opencv2/video/tracking.hpp
+/home/cj/code/play_opencv/KalmanFilter/KalmanTest/opencv2/video/tracking.hpp
+opencv2/highgui/highgui.hpp
+/home/cj/code/play_opencv/KalmanFilter/KalmanTest/opencv2/highgui/highgui.hpp
+stdio.h
+-
+

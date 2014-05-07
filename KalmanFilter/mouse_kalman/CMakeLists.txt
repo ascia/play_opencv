@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( mouse_kalman )
+find_package( OpenCV REQUIRED )
+add_executable( mouse_kalman mouse_kalman.cpp )
+target_link_libraries( mouse_kalman ${OpenCV_LIBS} )

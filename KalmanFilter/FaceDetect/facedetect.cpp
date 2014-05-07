@@ -5,13 +5,14 @@
 #include "opencv2/imgproc/imgproc_c.h"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/core/utility.hpp"
+#include "opencv2/video/tracking.hpp"
 
 
 #include <cctype>
 #include <iostream>
 #include <iterator>
 #include <stdio.h>
-
+#include <vector>
 using namespace std;
 using namespace cv;
 //--------------factor need to change-----
@@ -39,12 +40,24 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
                     CascadeClassifier& nestedCascade,
                     double scale, bool tryflip );
 IplImage* img_resize(IplImage* src_img, int new_width,int new_height);
+//for kalman filter
+struct face_location_struct { int x,y; };
+struct face_location_struct face_location = {-1,-1}, last_location;
 
+    //for kalman filter
+    vector<Point> facev,kalmanv;
+    KalmanFilter KF(4, 2, 0);
+    Mat state(4, 1, CV_32F); /* (x, y, Vx, Vy) */
+    Mat processNoise(4, 1, CV_32F);
+    Mat measurement = Mat::zeros( 2, 1,CV_32F); 
+    //---------------------- 
+//----------------------
 string cascadeName = "./data/haarcascades/haarcascade_frontalface_alt.xml";
 string nestedCascadeName = "./data/haarcascades/haarcascade_eye_tree_eyeglasses.xml";
 
 int main( int argc, const char** argv )
 {
+    
     CvCapture* capture = 0;
     Mat frame, frameCopy, image;
     const string scaleOpt = "--scale=";
@@ -129,12 +142,31 @@ int main( int argc, const char** argv )
         
     if( capture )
     {
+        
         int pos_frame = cvGetCaptureProperty(capture,CV_CAP_PROP_POS_FRAMES) + 1;
         int total_frame = cvGetCaptureProperty(capture,CV_CAP_PROP_FRAME_COUNT);
         cout << "In capture ..." << endl;
         
         for(; pos_frame < total_frame ;)
         {
+            //--------For kalman------------ 
+            KF.statePre.at<float>(0) = face_location.x;
+            KF.statePre.at<float>(1) = face_location.y;
+            KF.statePre.at<float>(2) = 0;
+            KF.statePre.at<float>(3) = 0;
+            KF.transitionMatrix = (Mat_<float>(4, 4) << 1,0,0,0,   0,1,0,0,  0,0,1,0,  0,0,0,1);
+
+            setIdentity(KF.measurementMatrix);
+            setIdentity(KF.processNoiseCov, Scalar::all(1e-5));
+            setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
+            setIdentity(KF.errorCovPost, Scalar::all(1));
+
+            randn(KF.statePost, Scalar::all(0), Scalar::all(1));
+
+            facev.clear();
+            kalmanv.clear();
+
+            //---------kalman end-----------
             pos_frame = cvGetCaptureProperty(capture,CV_CAP_PROP_POS_FRAMES) + 1;
             printf("Total %d ,NO. %d ",total_frame, pos_frame );
             IplImage* iplImg = cvQueryFrame( capture );
@@ -258,6 +290,10 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
     printf( "detection time = %g ms", t/((double)cvGetTickFrequency()*1000.) );
     face_found = faces.size();
     if(face_found > 0 ) printf(" face found %d",face_found);
+    //------For kalman------------
+    
+
+    //-------End Kalman------------- 
     for( vector<Rect>::const_iterator r = faces.begin(); r != faces.end(); r++, i++ )
     {
         Mat smallImgROI;
@@ -269,18 +305,7 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
         rectangle( img, cvPoint(cvRound(r->x*scale), cvRound(r->y*scale)),
                     cvPoint(cvRound((r->x + r->width-1)*scale), cvRound((r->y + r->height-1)*scale)),
                     color, 1, 1, 0);
-        // double aspect_ratio = (double)r->width/r->height;
-        // if( 0.75 < aspect_ratio && aspect_ratio < 1.3 )
-        // {
-        //     center.x = cvRound((r->x + r->width*0.5)*scale);
-        //     center.y = cvRound((r->y + r->height*0.5)*scale);
-        //     radius = cvRound((r->width + r->height)*0.25*scale);
-        //     circle( img, center, radius, color, 3, 8, 0 );
-        // }
-        // else
-        //     rectangle( img, cvPoint(cvRound(r->x*scale), cvRound(r->y*scale)),
-        //                cvPoint(cvRound((r->x + r->width-1)*scale), cvRound((r->y + r->height-1)*scale)),
-        //                color, 3, 8, 0);
+       
         if( nestedCascade.empty() )
             continue;
         smallImgROI = smallImg(*r);
