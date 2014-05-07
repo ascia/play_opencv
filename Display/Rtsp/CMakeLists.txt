@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( Rtsp )
+find_package( OpenCV REQUIRED )
+add_executable( Rtsp Rtsp.cpp )
+target_link_libraries( Rtsp ${OpenCV_LIBS} )
