@@ -20,7 +20,7 @@ vector<Point> mousev,kalmanv;
 void on_mouse(int event, int x, int y, int flags, void* param) {
 	//if (event == CV_EVENT_LBUTTONUP) 
 	{
-		last_mouse = mouse_info;
+		//last_mouse = mouse_info;
 		mouse_info.x = x;
 		mouse_info.y = y;
 		
@@ -53,7 +53,7 @@ int main (int argc, char * const argv[]) {
 		KF.transitionMatrix = (Mat_<float>(4, 4) << 1,0,0,0,   0,1,0,0,  0,0,1,0,  0,0,0,1);
 		
         setIdentity(KF.measurementMatrix);
-        setIdentity(KF.processNoiseCov, Scalar::all(1e-1));
+        setIdentity(KF.processNoiseCov, Scalar::all(1e-0));
         setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
         setIdentity(KF.errorCovPost, Scalar::all(1));
 		
@@ -72,14 +72,15 @@ int main (int argc, char * const argv[]) {
 			measurement(1) = mouse_info.y;
 			
 			Point measPt(measurement(0),measurement(1));
-			mousev.push_back(measPt);
+			//mousev.push_back(measPt);
+			mousev.push_back(predictPt);
             // generate measurement
             //measurement += KF.measurementMatrix*state;
 
 			Mat estimated = KF.correct(measurement);
 			Point statePt(estimated.at<float>(0),estimated.at<float>(1));
 			kalmanv.push_back(statePt);
-			
+			//kalmanv.push_back(predictPt);
             // plot points
 #define drawCross( center, color, d )                                 \
 line( img, Point( center.x - d, center.y - d ),                \
@@ -88,7 +89,7 @@ line( img, Point( center.x + d, center.y - d ),                \
 Point( center.x - d, center.y + d ), color, 2, CV_AA, 0 )
 
             img = Scalar::all(0);
-            drawCross( statePt, Scalar(255,255,255), 5 );
+            drawCross( predictPt, Scalar(255,255,255), 5 );
             drawCross( measPt, Scalar(0,0,255), 5 );
 
 			

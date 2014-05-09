@@ -37,8 +37,7 @@ int main(int, char**)
     Mat measurement = Mat::zeros(1, 1, CV_32F);
     char code = (char)-1;
 
-    // for(;;)
-    // {
+  
         randn( state, Scalar::all(0), Scalar::all(0.1) );
         KF.transitionMatrix = (Mat_<float>(2, 2) << 1, 1,    0, 1);
 
@@ -94,9 +93,7 @@ int main(int, char**)
             if( code > 0 )
                 break;
         }
-        if( code == 27 || code == 'q' || code == 'Q' )
-            break;
-    //}
+       
 
     return 0;
 }

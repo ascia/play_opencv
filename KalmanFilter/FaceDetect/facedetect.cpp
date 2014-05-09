@@ -16,49 +16,64 @@
 using namespace std;
 using namespace cv;
 //--------------factor need to change-----
-int frame_size_multiple = 20;
-
+float frame_size_multiple = 30;
+bool face_found_once = false;
+//int face_not_found = 0;
 //----------------------------------------
-static void help()
-{
-    cout << "\nThis program demonstrates the cascade recognizer. Now you can use Haar or LBP features.\n"
-            "This classifier can recognize many kinds of rigid objects, once the appropriate classifier is trained.\n"
-            "It's most known use is for faces.\n"
-            "Usage:\n"
-            "./facedetect [--cascade=<cascade_path> this is the primary trained classifier such as frontal face]\n"
-               "   [--nested-cascade[=nested_cascade_path this an optional secondary classifier such as eyes]]\n"
-               "   [--scale=<image scale greater or equal to 1, try 1.3 for example>]\n"
-               "   [--try-flip]\n"
-               "   [filename|camera_index]\n\n"
-            "see facedetect.cmd for one call:\n"
-            "./facedetect --cascade=\"../../data/haarcascades/haarcascade_frontalface_alt.xml\" --nested-cascade=\"../../data/haarcascades/haarcascade_eye.xml\" --scale=1.3\n\n"
-            "During execution:\n\tHit any key to quit.\n"
-            "\tUsing OpenCV version " << CV_VERSION << "\n" << endl;
-}
+
 
 void detectAndDraw( Mat& img, CascadeClassifier& cascade,
                     CascadeClassifier& nestedCascade,
                     double scale, bool tryflip );
+
 IplImage* img_resize(IplImage* src_img, int new_width,int new_height);
 //for kalman filter
-struct face_location_struct { int x,y; };
-struct face_location_struct face_location = {-1,-1}, last_location;
-
+struct face_location_struct { 
+    float x,y,width,height; 
+};
+struct face_location_struct face_location = {0,0,0,0},last_location = {0,0,0,0};
+double vx=0,vy=0;
+void cal_velocity(){
+    vx = face_location.x - last_location.x;
+    vy = face_location.y - last_location.y;   
+}
+void copy_location(){
+    last_location.x = face_location.x;
+    last_location.y = face_location.y;
+    last_location.width = face_location.width;
+    last_location.height = face_location.height;    
+}
     //for kalman filter
     vector<Point> facev,kalmanv;
-    KalmanFilter KF(4, 2, 0);
-    Mat state(4, 1, CV_32F); /* (x, y, Vx, Vy) */
-    Mat processNoise(4, 1, CV_32F);
-    Mat measurement = Mat::zeros( 2, 1,CV_32F); 
+    // KalmanFilter KF(4, 2, 0);
+    // Mat_<float> state(4, 1, CV_32F); /* (x, y, vx, vy) */
+    // Mat processNoise(4, 1, CV_32F);
+    // Mat_<float> measurement(2,1) ;//measurement =  Mat::zeros( 2, 1,CV_32F); 
+    KalmanFilter KFX(2, 1, 0);
+    KalmanFilter KFY(2, 1, 0);
+    Mat stateX(2, 1, CV_32F);
+    Mat stateY(2, 1, CV_32F);
+    Mat processNoiseX(2, 1, CV_32F);
+    Mat processNoiseY(2, 1, CV_32F);
+    Mat_<float> measurementX(1,1); //measurementX.setTo(Scalar(0));
+    Mat_<float> measurementY(1,1); //measurementY.setTo(Scalar(0));
+    //Mat measurementX = Mat::zeros(1, 1, CV_32F);
+    //Mat measurementY = Mat::zeros(1, 1, CV_32F);
+
+    // KalmanFilter KF(6, 2, 0);
+    // Mat_ state(6, 1);  (x, y, Vx, Vy) 
+    // Mat processNoise(6, 1, CV_32F);
+
     //---------------------- 
 //----------------------
-string cascadeName = "./data/haarcascades/haarcascade_frontalface_alt.xml";
-string nestedCascadeName = "./data/haarcascades/haarcascade_eye_tree_eyeglasses.xml";
+string cascadeName = "./DetectData/haarcascade_frontalface_alt2.xml";
+string nestedCascadeName = "./DetectData/haarcascade_eye_tree_eyeglasses.xml";
 
 int main( int argc, const char** argv )
 {
     
-    CvCapture* capture = 0;
+
+    CvCapture* capture = 0;       
     Mat frame, frameCopy, image;
     const string scaleOpt = "--scale=";
     size_t scaleOptLen = scaleOpt.length();
@@ -71,73 +86,20 @@ int main( int argc, const char** argv )
     string inputName;
     bool tryflip = false;
 
-    help();
 
     CascadeClassifier cascade, nestedCascade;
     double scale = 1;
 
-    for( int i = 1; i < argc; i++ )
-    {
-        cout << "Processing " << i << " " <<  argv[i] << endl;
-        if( cascadeOpt.compare( 0, cascadeOptLen, argv[i], cascadeOptLen ) == 0 )
-        {
-            cascadeName.assign( argv[i] + cascadeOptLen );
-            cout << "  from which we have cascadeName= " << cascadeName << endl;
-        }
-        else if( nestedCascadeOpt.compare( 0, nestedCascadeOptLen, argv[i], nestedCascadeOptLen ) == 0 )
-        {
-            if( argv[i][nestedCascadeOpt.length()] == '=' )
-                nestedCascadeName.assign( argv[i] + nestedCascadeOpt.length() + 1 );
-            if( !nestedCascade.load( nestedCascadeName ) )
-                cerr << "WARNING: Could not load classifier cascade for nested objects" << endl;
-        }
-        else if( scaleOpt.compare( 0, scaleOptLen, argv[i], scaleOptLen ) == 0 )
-        {
-            if( !sscanf( argv[i] + scaleOpt.length(), "%lf", &scale ) || scale < 1 )
-                scale = 1;
-            cout << " from which we read scale = " << scale << endl;
-        }
-        else if( tryFlipOpt.compare( 0, tryFlipOptLen, argv[i], tryFlipOptLen ) == 0 )
-        {
-            tryflip = true;
-            cout << " will try to flip image horizontally to detect assymetric objects\n";
-        }
-        else if( argv[i][0] == '-' )
-        {
-            cerr << "WARNING: Unknown option %s" << argv[i] << endl;
-        }
-        else
-            inputName.assign( argv[i] );
-    }
-
     if( !cascade.load( cascadeName ) )
     {
         cerr << "ERROR: Could not load classifier cascade" << endl;
-        help();
         return -1;
     }
 
-    if( inputName.empty() || (isdigit(inputName.c_str()[0]) && inputName.c_str()[1] == '\0') )
-    {
-        capture = cvCaptureFromCAM( inputName.empty() ? 0 : inputName.c_str()[0] - '0' );
-        int c = inputName.empty() ? 0 : inputName.c_str()[0] - '0' ;
-        if(!capture) cout << "Capture from CAM " <<  c << " didn't work" << endl;
-    }
-    else if( inputName.size() )
-    {
-        image = imread( inputName, 1 );
-        if( image.empty() )
-        {
-            capture = cvCaptureFromAVI( inputName.c_str() );
-            if(!capture) cout << "Capture from AVI didn't work" << endl;
-        }
-    }
-    else
-    {
-        image = imread( "lena.jpg", 1 );
-        if(image.empty()) cout << "Couldn't read lena.jpg" << endl;
-    }
-
+  
+    capture = cvCaptureFromAVI( argv[1] );
+    if(!capture) cout << "Capture from AVI didn't work" << endl;
+    
     cvNamedWindow( "result", 1 );
         
     if( capture )
@@ -146,27 +108,59 @@ int main( int argc, const char** argv )
         int pos_frame = cvGetCaptureProperty(capture,CV_CAP_PROP_POS_FRAMES) + 1;
         int total_frame = cvGetCaptureProperty(capture,CV_CAP_PROP_FRAME_COUNT);
         cout << "In capture ..." << endl;
+        //-----kalman xy-----
+        KFX.statePre.at<float>(0) = face_location.x;
+        KFY.statePre.at<float>(0) = face_location.y;
+        KFX.statePre.at<float>(1) = 0;
+        KFY.statePre.at<float>(1) = 0;
         
+        randn( stateX, Scalar::all(0), Scalar::all(1) );
+        
+        KFX.transitionMatrix = (Mat_<float>(2, 2) << 1, 2,    0, 1);
+        
+        randn( stateY, Scalar::all(0), Scalar::all(1) );
+        
+        KFY.transitionMatrix = (Mat_<float>(2, 2) << 1, 2,    0, 1);
+        
+        setIdentity(KFX.measurementMatrix);
+        setIdentity(KFX.processNoiseCov, Scalar::all(1e-5));
+        setIdentity(KFX.measurementNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFX.errorCovPost, Scalar::all(1));
+        
+        setIdentity(KFY.measurementMatrix);
+        setIdentity(KFY.processNoiseCov, Scalar::all(1e-5));
+        setIdentity(KFY.measurementNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFY.errorCovPost, Scalar::all(1));
+        
+        randn(KFX.statePost, Scalar::all(0), Scalar::all(1));
+        randn(KFY.statePost, Scalar::all(0), Scalar::all(1));
+        //-----end xy------        
+       
+
+
+        // KF.statePre.at<float>(0) = face_location.x;
+        // KF.statePre.at<float>(1) = face_location.y;
+        // KF.statePre.at<float>(2) = 0;
+        // KF.statePre.at<float>(3) = 0;
+
+        // randn( state, Scalar::all(0), Scalar::all(1) );
+            
+        // KF.transitionMatrix = (Mat_<float>(4, 4) << 1,1,0,0,   0,0,1,1,  0,1,0,0,  0,0,0,1);
+
+        // setIdentity(KF.measurementMatrix);
+        // setIdentity(KF.processNoiseCov, Scalar::all(1e-1));
+        // setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
+        // setIdentity(KF.errorCovPost, Scalar::all(1));
+
+        // randn(KF.statePost, Scalar::all(0), Scalar::all(1));
+
+        facev.clear();
+        kalmanv.clear();
+        //---------kalman end-----------
+
         for(; pos_frame < total_frame ;)
         {
-            //--------For kalman------------ 
-            KF.statePre.at<float>(0) = face_location.x;
-            KF.statePre.at<float>(1) = face_location.y;
-            KF.statePre.at<float>(2) = 0;
-            KF.statePre.at<float>(3) = 0;
-            KF.transitionMatrix = (Mat_<float>(4, 4) << 1,0,0,0,   0,1,0,0,  0,0,1,0,  0,0,0,1);
-
-            setIdentity(KF.measurementMatrix);
-            setIdentity(KF.processNoiseCov, Scalar::all(1e-5));
-            setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
-            setIdentity(KF.errorCovPost, Scalar::all(1));
-
-            randn(KF.statePost, Scalar::all(0), Scalar::all(1));
-
-            facev.clear();
-            kalmanv.clear();
-
-            //---------kalman end-----------
+            
             pos_frame = cvGetCaptureProperty(capture,CV_CAP_PROP_POS_FRAMES) + 1;
             printf("Total %d ,NO. %d ",total_frame, pos_frame );
             IplImage* iplImg = cvQueryFrame( capture );
@@ -245,9 +239,15 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
                     CascadeClassifier& nestedCascade,
                     double scale, bool tryflip )
 {
+    
     int i = 0;
     double t = 0;
     int face_found = 0;
+    //------For kalman------
+    //extern bool face_found_once = false;
+    //copy_location();
+    // cal_velocity();
+    //------End Kalman------
     vector<Rect> faces, faces2;
     const static Scalar colors[] =  { CV_RGB(120,120,200),
         CV_RGB(0,128,255),
@@ -262,15 +262,17 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
     cvtColor( img, gray, COLOR_BGR2GRAY );
     resize( gray, smallImg, smallImg.size(), 0, 0, INTER_LINEAR );
     equalizeHist( smallImg, smallImg );
-
+    
     t = (double)cvGetTickCount();
+    
     cascade.detectMultiScale( smallImg, faces,
-        1.1, 2, 0
+        1.3, 2, 0
         |CASCADE_FIND_BIGGEST_OBJECT
         |CASCADE_DO_ROUGH_SEARCH
         |CASCADE_SCALE_IMAGE
         ,
         Size(30, 30) );
+    
     if( tryflip )
     {
         flip(smallImg, smallImg, 1);
@@ -286,45 +288,160 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
             faces.push_back(Rect(smallImg.cols - r->x - r->width, r->y, r->width, r->height));
         }
     }
-    t = (double)cvGetTickCount() - t;
-    printf( "detection time = %g ms", t/((double)cvGetTickFrequency()*1000.) );
-    face_found = faces.size();
-    if(face_found > 0 ) printf(" face found %d",face_found);
-    //------For kalman------------
     
-
-    //-------End Kalman------------- 
+    t = (double)cvGetTickCount() - t;
+    //printf( "detection time = %g ms", t/((double)cvGetTickFrequency()*1000.) );
+    
+        
+    //}
+    if(faces.size() > 0) face_found = true ; 
     for( vector<Rect>::const_iterator r = faces.begin(); r != faces.end(); r++, i++ )
     {
-        Mat smallImgROI;
-        vector<Rect> nestedObjects;
-        Point center;
+     
         Scalar color = colors[i%8];
-        int radius;
+   
+        //-----For Kalman-----
+        face_location.x      = r->x;    
+        face_location.y      = r->y; 
+        face_location.width  = r->width;
+        face_location.height = r->height;  
+        //-----End Kalman-----
         // modified by CJ
         rectangle( img, cvPoint(cvRound(r->x*scale), cvRound(r->y*scale)),
                     cvPoint(cvRound((r->x + r->width-1)*scale), cvRound((r->y + r->height-1)*scale)),
                     color, 1, 1, 0);
        
-        if( nestedCascade.empty() )
-            continue;
-        smallImgROI = smallImg(*r);
-        nestedCascade.detectMultiScale( smallImgROI, nestedObjects,
-            1.1, 2, 0
-            //|CASCADE_FIND_BIGGEST_OBJECT
-            //|CASCADE_DO_ROUGH_SEARCH
-            //|CASCADE_DO_CANNY_PRUNING
-            |CASCADE_SCALE_IMAGE
-            ,
-            Size(30, 30) );
-        for( vector<Rect>::const_iterator nr = nestedObjects.begin(); nr != nestedObjects.end(); nr++ )
-        {
-            center.x = cvRound((r->x + nr->x + nr->width*0.5)*scale);
-            center.y = cvRound((r->y + nr->y + nr->height*0.5)*scale);
-            radius = cvRound((nr->width + nr->height)*0.25*scale);
-            circle( img, center, radius, color, 3, 8, 0 );
-        }
+        
     }
+    
+    if(face_found > 0 ){ 
+
+        //printf(" face found %d",face_found);
+//------For kalman------------
+        cal_velocity();
+        copy_location();
+        Point measPt( face_location.x, face_location.y+face_location.height/2);
+        //printf(" mPt = ( %d, %d)",measPt.x,measPt.y);
+        facev.push_back(measPt);
+
+        face_found_once = true;
+        
+
+    } 
+    
+    if(face_found_once){
+                        
+        //----kalman xy-----
+        Point statePt(stateX.at<float>(0),stateY.at<float>(0));
+        Mat predictionX = KFX.predict();
+        Mat predictionY = KFY.predict();
+        
+        Point predictPt(predictionX.at<float>(0),predictionY.at<float>(0));
+        kalmanv.push_back(predictPt);
+        
+        //randn( measurementX, Scalar::all(0), Scalar::all(KFX.measurementNoiseCov.at<float>(0)));
+        //randn( measurementY, Scalar::all(0), Scalar::all(KFY.measurementNoiseCov.at<float>(0)));
+        // measurement(0) = face_location.x;// + measurement(2);
+        // measurement(1) = face_location.y;// + measurement(3);
+        
+        if(face_found > 0){    
+            measurementX(0) = face_location.x;// + measurement(2);
+            measurementY(0) = face_location.y;// + measurement(3);
+        } else {
+            if(vx > 15 ) vx = 15;
+            else if (vx < -15) vx = -15;
+            if(vy > 15 ) vy = 15;
+            else if (vy < -15) vy = -15;
+            printf("vx = %f,vy = %f",vx,vy);
+            measurementX(0) = last_location.x = last_location.x+vx;
+            measurementY(0) = last_location.y = last_location.y+vy;
+            //measurementX += KFX.measurementMatrix*stateX/2;
+            //measurementY += KFY.measurementMatrix*stateY/2;
+        }
+        
+        // measurementX(0) = face_location.x;
+       
+        // measurementY(0) = face_location.y;
+        
+        if(theRNG().uniform(0,4) != 0)
+                KFX.correct(measurementX);
+        if(theRNG().uniform(0,4) != 0)
+                KFY.correct(measurementY);    
+            
+            randn( processNoiseX, Scalar(0), Scalar::all(sqrt(KFX.processNoiseCov.at<float>(0, 0))));
+            stateX = KFX.transitionMatrix*stateX + processNoiseX;
+            randn( processNoiseY, Scalar(0), Scalar::all(sqrt(KFY.processNoiseCov.at<float>(0, 0))));
+            stateY = KFY.transitionMatrix*stateY + processNoiseY;
+
+        //----end xy
+
+
+        // Mat prediction = KF.predict();
+        // Point predictPt(prediction.at<float>(0)+ vx,prediction.at<float>(1)+face_location.height/2+ vy);
+            
+        // kalmanv.push_back(predictPt);
+        // printf(" K = %d",kalmanv.size());
+        // printf(" prPt = ( %d, %d)",predictPt.x,predictPt.y);
+
+        // Point statePt(state.at<float>(0),state.at<float>(1));
+            
+
+     
+        // measurement(0) = face_location.x;// + measurement(2);
+        // measurement(1) = face_location.y;// + measurement(3);
+        
+        // if(face_found > 0){    
+        //     measurement(0) = face_location.x;// + measurement(2);
+        //     measurement(1) = face_location.y;// + measurement(3);
+        // } else {
+        //     if(vx > 15 ) vx = 15;
+        //     else if (vx < -15) vx = -15;
+        //     if(vy > 15 ) vy = 15;
+        //     else if (vy < -15) vy = -15;
+        //     measurement(0) = last_location.x = last_location.x+vx;
+        //     measurement(1) = last_location.y = last_location.y+vy;
+        // }
+        //printf("vx = %f,vy = %f",vx,vy);
+        //measurement(2) = last_location.x - face_location.x;
+        //measurement(3) = last_location.y - face_location.y;            
+            
+        //measurement += KF.measurementMatrix*state;
+
+            // Point measPt(measurement.at<float>(0),measurement.at<float>(1)+face_location.height/2);
+            // printf(" mPt = ( %d, %d)",measPt.x,measPt.y);
+            // facev.push_back(measPt);
+            //printf(" F = %d",facev.size());
+        #define drawCross( center, color, d )                                        \
+                line( img, Point( center.x - d, center.y - d ),                          \
+                             Point( center.x + d, center.y + d ), color, 1, LINE_AA, 0); \
+                line( img, Point( center.x + d, center.y - d ),                          \
+                             Point( center.x - d, center.y + d ), color, 1, LINE_AA, 0 )
+            //drawCross( statePt, Scalar(255,255,255), 3 );
+            //drawCross( measPt, Scalar(0,0,255), 3 );
+        drawCross( predictPt, Scalar(0,255,0), 3 );
+
+        if(!face_found){
+            if(face_location.width >0) face_location.width*=1.01;
+            if(face_location.height >0) face_location.height*=1.01;
+            //vx*=0.995;
+            //vy*=0.995;
+            rectangle( img, cvPoint(cvRound(predictPt.x*scale), cvRound(predictPt.y*scale - face_location.height/2)),
+                cvPoint(cvRound((predictPt.x + face_location.width)*scale), cvRound((predictPt.y + face_location.height/2)*scale)),
+                CV_RGB(255,0,0), 2, 1, 0);
+        }
+            
+            
+              
+        //if(theRNG().uniform(0,4) != 0)
+        // KF.correct(measurement);
+            
+        // randn( processNoise, Scalar(0), Scalar::all(sqrt(KF.processNoiseCov.at<float>(0, 0))));
+        // state = KF.transitionMatrix*state + processNoise; 
+    }
+    for (int i = 1; i < facev.size(); i++) {
+        line(img, facev[i-1], facev[i], Scalar(255,255,0), 1);
+    }
+    //-------End Kalman-------------    
     printf("\n");
     cv::imshow( "result", img );
 }
