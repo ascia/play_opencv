@@ -49,12 +49,12 @@ void copy_location(){
     // Mat_<float> state(4, 1, CV_32F); /* (x, y, vx, vy) */
     // Mat processNoise(4, 1, CV_32F);
     // Mat_<float> measurement(2,1) ;//measurement =  Mat::zeros( 2, 1,CV_32F); 
-    KalmanFilter KFX(2, 1, 0);
-    KalmanFilter KFY(2, 1, 0);
-    Mat stateX(2, 1, CV_32F);
-    Mat stateY(2, 1, CV_32F);
-    Mat processNoiseX(2, 1, CV_32F);
-    Mat processNoiseY(2, 1, CV_32F);
+    KalmanFilter KFX(3, 1, 0);
+    KalmanFilter KFY(3, 1, 0);
+    Mat stateX(3, 1, CV_32F);
+    Mat stateY(3, 1, CV_32F);
+    Mat processNoiseX(3, 1, CV_32F);
+    Mat processNoiseY(3, 1, CV_32F);
     Mat_<float> measurementX(1,1); //measurementX.setTo(Scalar(0));
     Mat_<float> measurementY(1,1); //measurementY.setTo(Scalar(0));
     //Mat measurementX = Mat::zeros(1, 1, CV_32F);
@@ -113,46 +113,27 @@ int main( int argc, const char** argv )
         KFY.statePre.at<float>(0) = face_location.y;
         KFX.statePre.at<float>(1) = 0;
         KFY.statePre.at<float>(1) = 0;
+
+        KFX.statePre.at<float>(2) = 0;
+        KFY.statePre.at<float>(2) = 0;
         
-        randn( stateX, Scalar::all(0), Scalar::all(1) );
+        //randn( stateX, Scalar::all(0), Scalar::all(1) );
         
-        KFX.transitionMatrix = (Mat_<float>(2, 2) << 1, 2,    0, 1);
+        KFX.transitionMatrix = (Mat_<float>(3, 3) << 1, 1, 0.5,    0, 1, 1   , 0, 0, 1);
         
-        randn( stateY, Scalar::all(0), Scalar::all(1) );
+        ///randn( stateY, Scalar::all(0), Scalar::all(1) );
         
-        KFY.transitionMatrix = (Mat_<float>(2, 2) << 1, 2,    0, 1);
+        KFY.transitionMatrix = (Mat_<float>(3, 3) << 1, 1, 0.5,    0, 1, 1   , 0, 0, 1);
         
         setIdentity(KFX.measurementMatrix);
-        setIdentity(KFX.processNoiseCov, Scalar::all(1e-5));
-        setIdentity(KFX.measurementNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFX.processNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFX.measurementNoiseCov, Scalar::all(1e-0));
         setIdentity(KFX.errorCovPost, Scalar::all(1));
         
         setIdentity(KFY.measurementMatrix);
-        setIdentity(KFY.processNoiseCov, Scalar::all(1e-5));
-        setIdentity(KFY.measurementNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFY.processNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFY.measurementNoiseCov, Scalar::all(1e-0));
         setIdentity(KFY.errorCovPost, Scalar::all(1));
-        
-        randn(KFX.statePost, Scalar::all(0), Scalar::all(1));
-        randn(KFY.statePost, Scalar::all(0), Scalar::all(1));
-        //-----end xy------        
-       
-
-
-        // KF.statePre.at<float>(0) = face_location.x;
-        // KF.statePre.at<float>(1) = face_location.y;
-        // KF.statePre.at<float>(2) = 0;
-        // KF.statePre.at<float>(3) = 0;
-
-        // randn( state, Scalar::all(0), Scalar::all(1) );
-            
-        // KF.transitionMatrix = (Mat_<float>(4, 4) << 1,1,0,0,   0,0,1,1,  0,1,0,0,  0,0,0,1);
-
-        // setIdentity(KF.measurementMatrix);
-        // setIdentity(KF.processNoiseCov, Scalar::all(1e-1));
-        // setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
-        // setIdentity(KF.errorCovPost, Scalar::all(1));
-
-        // randn(KF.statePost, Scalar::all(0), Scalar::all(1));
 
         facev.clear();
         kalmanv.clear();
@@ -339,33 +320,19 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
         Point predictPt(predictionX.at<float>(0),predictionY.at<float>(0));
         kalmanv.push_back(predictPt);
         
-        //randn( measurementX, Scalar::all(0), Scalar::all(KFX.measurementNoiseCov.at<float>(0)));
-        //randn( measurementY, Scalar::all(0), Scalar::all(KFY.measurementNoiseCov.at<float>(0)));
+        randn( measurementX, Scalar::all(0), Scalar::all(KFX.measurementNoiseCov.at<float>(0)));
+        randn( measurementY, Scalar::all(0), Scalar::all(KFY.measurementNoiseCov.at<float>(0)));
         // measurement(0) = face_location.x;// + measurement(2);
         // measurement(1) = face_location.y;// + measurement(3);
         
         if(face_found > 0){    
             measurementX(0) = face_location.x;// + measurement(2);
             measurementY(0) = face_location.y;// + measurement(3);
-        } else {
-            if(vx > 15 ) vx = 15;
-            else if (vx < -15) vx = -15;
-            if(vy > 15 ) vy = 15;
-            else if (vy < -15) vy = -15;
-            printf("vx = %f,vy = %f",vx,vy);
-            measurementX(0) = last_location.x = last_location.x+vx;
-            measurementY(0) = last_location.y = last_location.y+vy;
-            //measurementX += KFX.measurementMatrix*stateX/2;
-            //measurementY += KFY.measurementMatrix*stateY/2;
-        }
+        } 
         
-        // measurementX(0) = face_location.x;
-       
-        // measurementY(0) = face_location.y;
-        
-        if(theRNG().uniform(0,4) != 0)
+        if(theRNG().uniform(0,4) != 0 && face_found > 0)
                 KFX.correct(measurementX);
-        if(theRNG().uniform(0,4) != 0)
+        if(theRNG().uniform(0,4) != 0 && face_found > 0)
                 KFY.correct(measurementY);    
             
             randn( processNoiseX, Scalar(0), Scalar::all(sqrt(KFX.processNoiseCov.at<float>(0, 0))));
@@ -376,41 +343,6 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
         //----end xy
 
 
-        // Mat prediction = KF.predict();
-        // Point predictPt(prediction.at<float>(0)+ vx,prediction.at<float>(1)+face_location.height/2+ vy);
-            
-        // kalmanv.push_back(predictPt);
-        // printf(" K = %d",kalmanv.size());
-        // printf(" prPt = ( %d, %d)",predictPt.x,predictPt.y);
-
-        // Point statePt(state.at<float>(0),state.at<float>(1));
-            
-
-     
-        // measurement(0) = face_location.x;// + measurement(2);
-        // measurement(1) = face_location.y;// + measurement(3);
-        
-        // if(face_found > 0){    
-        //     measurement(0) = face_location.x;// + measurement(2);
-        //     measurement(1) = face_location.y;// + measurement(3);
-        // } else {
-        //     if(vx > 15 ) vx = 15;
-        //     else if (vx < -15) vx = -15;
-        //     if(vy > 15 ) vy = 15;
-        //     else if (vy < -15) vy = -15;
-        //     measurement(0) = last_location.x = last_location.x+vx;
-        //     measurement(1) = last_location.y = last_location.y+vy;
-        // }
-        //printf("vx = %f,vy = %f",vx,vy);
-        //measurement(2) = last_location.x - face_location.x;
-        //measurement(3) = last_location.y - face_location.y;            
-            
-        //measurement += KF.measurementMatrix*state;
-
-            // Point measPt(measurement.at<float>(0),measurement.at<float>(1)+face_location.height/2);
-            // printf(" mPt = ( %d, %d)",measPt.x,measPt.y);
-            // facev.push_back(measPt);
-            //printf(" F = %d",facev.size());
         #define drawCross( center, color, d )                                        \
                 line( img, Point( center.x - d, center.y - d ),                          \
                              Point( center.x + d, center.y + d ), color, 1, LINE_AA, 0); \
@@ -431,12 +363,7 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
         }
             
             
-              
-        //if(theRNG().uniform(0,4) != 0)
-        // KF.correct(measurement);
-            
-        // randn( processNoise, Scalar(0), Scalar::all(sqrt(KF.processNoiseCov.at<float>(0, 0))));
-        // state = KF.transitionMatrix*state + processNoise; 
+   
     }
     for (int i = 1; i < facev.size(); i++) {
         line(img, facev[i-1], facev[i], Scalar(255,255,0), 1);
