@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/cj/code/play_opencv/Display/BackgroundSubtractor/bs.cpp
+opencv2/highgui/highgui.hpp
+-
+opencv2/video/background_segm.hpp
+-
+stdio.h
+-
+iostream
+-
+sstream
+-
+

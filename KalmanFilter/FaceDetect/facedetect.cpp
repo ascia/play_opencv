@@ -18,7 +18,7 @@ using namespace cv;
 //--------------factor need to change-----
 float frame_size_multiple = 30;
 bool face_found_once = false;
-//int face_not_found = 0;
+
 //----------------------------------------
 
 
@@ -32,42 +32,23 @@ struct face_location_struct {
     float x,y,width,height; 
 };
 struct face_location_struct face_location = {0,0,0,0},last_location = {0,0,0,0};
-double vx=0,vy=0;
-void cal_velocity(){
-    vx = face_location.x - last_location.x;
-    vy = face_location.y - last_location.y;   
-}
-void copy_location(){
-    last_location.x = face_location.x;
-    last_location.y = face_location.y;
-    last_location.width = face_location.width;
-    last_location.height = face_location.height;    
-}
+
     //for kalman filter
     vector<Point> facev,kalmanv;
-    // KalmanFilter KF(4, 2, 0);
-    // Mat_<float> state(4, 1, CV_32F); /* (x, y, vx, vy) */
-    // Mat processNoise(4, 1, CV_32F);
-    // Mat_<float> measurement(2,1) ;//measurement =  Mat::zeros( 2, 1,CV_32F); 
+
+    
     KalmanFilter KFX(3, 1, 0);
     KalmanFilter KFY(3, 1, 0);
     Mat stateX(3, 1, CV_32F);
     Mat stateY(3, 1, CV_32F);
     Mat processNoiseX(3, 1, CV_32F);
     Mat processNoiseY(3, 1, CV_32F);
-    Mat_<float> measurementX(1,1); //measurementX.setTo(Scalar(0));
-    Mat_<float> measurementY(1,1); //measurementY.setTo(Scalar(0));
-    //Mat measurementX = Mat::zeros(1, 1, CV_32F);
-    //Mat measurementY = Mat::zeros(1, 1, CV_32F);
-
-    // KalmanFilter KF(6, 2, 0);
-    // Mat_ state(6, 1);  (x, y, Vx, Vy) 
-    // Mat processNoise(6, 1, CV_32F);
+    Mat_<float> measurementX(1,1); 
+    Mat_<float> measurementY(1,1); 
 
     //---------------------- 
 //----------------------
-string cascadeName = "./DetectData/haarcascade_frontalface_alt2.xml";
-string nestedCascadeName = "./DetectData/haarcascade_eye_tree_eyeglasses.xml";
+string cascadeName = "./haarcascade_frontalface_alt2.xml";
 
 int main( int argc, const char** argv )
 {
@@ -117,23 +98,23 @@ int main( int argc, const char** argv )
         KFX.statePre.at<float>(2) = 0;
         KFY.statePre.at<float>(2) = 0;
         
-        //randn( stateX, Scalar::all(0), Scalar::all(1) );
+
         
         KFX.transitionMatrix = (Mat_<float>(3, 3) << 1, 1, 0.5,    0, 1, 1   , 0, 0, 1);
         
-        ///randn( stateY, Scalar::all(0), Scalar::all(1) );
+
         
         KFY.transitionMatrix = (Mat_<float>(3, 3) << 1, 1, 0.5,    0, 1, 1   , 0, 0, 1);
         
         setIdentity(KFX.measurementMatrix);
-        setIdentity(KFX.processNoiseCov, Scalar::all(1e-1));
-        setIdentity(KFX.measurementNoiseCov, Scalar::all(1e-0));
-        setIdentity(KFX.errorCovPost, Scalar::all(1));
+        setIdentity(KFX.processNoiseCov, Scalar::all(1e-3));
+        setIdentity(KFX.measurementNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFX.errorCovPost, Scalar::all(0.1));
         
         setIdentity(KFY.measurementMatrix);
-        setIdentity(KFY.processNoiseCov, Scalar::all(1e-1));
-        setIdentity(KFY.measurementNoiseCov, Scalar::all(1e-0));
-        setIdentity(KFY.errorCovPost, Scalar::all(1));
+        setIdentity(KFY.processNoiseCov, Scalar::all(1e-4));
+        setIdentity(KFY.measurementNoiseCov, Scalar::all(1e-1));
+        setIdentity(KFY.errorCovPost, Scalar::all(0.1));
 
         facev.clear();
         kalmanv.clear();
@@ -224,11 +205,6 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
     int i = 0;
     double t = 0;
     int face_found = 0;
-    //------For kalman------
-    //extern bool face_found_once = false;
-    //copy_location();
-    // cal_velocity();
-    //------End Kalman------
     vector<Rect> faces, faces2;
     const static Scalar colors[] =  { CV_RGB(120,120,200),
         CV_RGB(0,128,255),
@@ -297,12 +273,9 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
     
     if(face_found > 0 ){ 
 
-        //printf(" face found %d",face_found);
-//------For kalman------------
-        cal_velocity();
-        copy_location();
+  
         Point measPt( face_location.x, face_location.y+face_location.height/2);
-        //printf(" mPt = ( %d, %d)",measPt.x,measPt.y);
+
         facev.push_back(measPt);
 
         face_found_once = true;
@@ -313,17 +286,16 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
     if(face_found_once){
                         
         //----kalman xy-----
-        Point statePt(stateX.at<float>(0),stateY.at<float>(0));
+        Point statePt(stateX.at<float>(0),stateY.at<float>(0)+face_location.height/2);
         Mat predictionX = KFX.predict();
         Mat predictionY = KFY.predict();
         
-        Point predictPt(predictionX.at<float>(0),predictionY.at<float>(0));
+        Point predictPt(predictionX.at<float>(0),predictionY.at<float>(0)+face_location.height/2);
         kalmanv.push_back(predictPt);
         
         randn( measurementX, Scalar::all(0), Scalar::all(KFX.measurementNoiseCov.at<float>(0)));
         randn( measurementY, Scalar::all(0), Scalar::all(KFY.measurementNoiseCov.at<float>(0)));
-        // measurement(0) = face_location.x;// + measurement(2);
-        // measurement(1) = face_location.y;// + measurement(3);
+
         
         if(face_found > 0){    
             measurementX(0) = face_location.x;// + measurement(2);
@@ -355,8 +327,7 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
         if(!face_found){
             if(face_location.width >0) face_location.width*=1.01;
             if(face_location.height >0) face_location.height*=1.01;
-            //vx*=0.995;
-            //vy*=0.995;
+
             rectangle( img, cvPoint(cvRound(predictPt.x*scale), cvRound(predictPt.y*scale - face_location.height/2)),
                 cvPoint(cvRound((predictPt.x + face_location.width)*scale), cvRound((predictPt.y + face_location.height/2)*scale)),
                 CV_RGB(255,0,0), 2, 1, 0);
@@ -366,7 +337,10 @@ void detectAndDraw( Mat& img, CascadeClassifier& cascade,
    
     }
     for (int i = 1; i < facev.size(); i++) {
-        line(img, facev[i-1], facev[i], Scalar(255,255,0), 1);
+        line(img, facev[i-1], facev[i], Scalar(255,255,255), 1);
+    }
+    for (int i = 1; i < kalmanv.size(); i++) {
+        line(img, kalmanv[i-1], kalmanv[i], Scalar(0,0,255), 1);
     }
     //-------End Kalman-------------    
     printf("\n");
