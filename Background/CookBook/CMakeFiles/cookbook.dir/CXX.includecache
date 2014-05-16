@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/cj/code/play_opencv/Background/CookBook/cookbook.cpp
+opencv2/core.hpp
+/home/cj/code/play_opencv/Background/CookBook/opencv2/core.hpp
+opencv2/core/utility.hpp
+/home/cj/code/play_opencv/Background/CookBook/opencv2/core/utility.hpp
+opencv2/video/background_segm.hpp
+/home/cj/code/play_opencv/Background/CookBook/opencv2/video/background_segm.hpp
+opencv2/imgproc/imgproc_c.h
+/home/cj/code/play_opencv/Background/CookBook/opencv2/imgproc/imgproc_c.h
+opencv2/highgui/highgui_c.h
+/home/cj/code/play_opencv/Background/CookBook/opencv2/highgui/highgui_c.h
+opencv2/legacy.hpp
+/home/cj/code/play_opencv/Background/CookBook/opencv2/legacy.hpp
+stdio.h
+-
+stdlib.h
+-
+ctype.h
+-
+

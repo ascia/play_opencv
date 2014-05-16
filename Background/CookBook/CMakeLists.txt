@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project( cookbook )
+find_package( OpenCV REQUIRED )
+add_executable( cookbook cookbook.cpp )
+target_link_libraries( cookbook ${OpenCV_LIBS} )

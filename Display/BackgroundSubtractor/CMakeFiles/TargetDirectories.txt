@@ -1,1 +1,0 @@
-/home/cj/code/play_opencv/Display/BackgroundSubtractor/CMakeFiles/bs.dir
